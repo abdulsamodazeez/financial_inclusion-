@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import joblib
+from sklearn.preprocessing import LabelEncoder
+
 
 # Define the login page
 def login_page():
@@ -34,36 +36,45 @@ def predict():
     model = load_model()  # Load the model when the user selects the "Prediction" page
     st.title("Financial Inclusion Prediction")
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+    
     if uploaded_file:
         data = pd.read_csv(uploaded_file)
+        data_original = data.copy()  # Keep a copy of the original data
 
         data = data[['location_type', 'cellphone_access', 'household_size',
-       'age_of_respondent', 'gender_of_respondent', 'relationship_with_head',
-       'marital_status', 'education_level', 'job_type']]
+                     'age_of_respondent', 'gender_of_respondent', 'relationship_with_head',
+                     'marital_status', 'education_level', 'job_type']]
         
         # Encoding categorical variables
-        from sklearn.preprocessing import LabelEncoder
+        label_encoders = {}
+        categorical_columns = ['location_type', 'cellphone_access', 'gender_of_respondent',
+                               'relationship_with_head', 'marital_status', 'education_level', 'job_type']
 
-        label_encoder = LabelEncoder()
-        data['location_type'] = label_encoder.fit_transform(data['location_type'])
-        data['cellphone_access'] = label_encoder.fit_transform(data['cellphone_access'])
-        data['gender_of_respondent'] = label_encoder.fit_transform(data['gender_of_respondent'])
-        data['relationship_with_head'] = label_encoder.fit_transform(data['relationship_with_head'])
-        data['marital_status'] = label_encoder.fit_transform(data['marital_status'])
-        data['education_level'] = label_encoder.fit_transform(data['education_level'])
-        data['job_type'] = label_encoder.fit_transform(data['job_type'])
-        
+        for column in categorical_columns:
+            le = LabelEncoder()
+            data[column] = le.fit_transform(data[column])
+            label_encoders[column] = le  # Save the label encoder for inverse transformation later
+
         # Make predictions
-        financial = model.predict(data) # Get probability of churn
-        # Add churn probabilities as a new column to the DataFrame
-        data['financial_inclusion'] = financial
-        # Display the updated DataFrame
-        st.dataframe(data)
+        financial = model.predict(data)  # Get predictions
 
-        # Save predicted data with churn probability (optional)
+        # Add predictions as a new column to the DataFrame
+        data_original['financial_inclusion'] = financial
+        
+        # Revert encoded values back to original categorical labels
+        for column in categorical_columns:
+            le = label_encoders[column]
+            data_original[column] = le.inverse_transform(data[column])
+
+        data_original.drop("bank_account", axis=1, inplace=True)
+        # Display the updated DataFrame
+        st.dataframe(data_original)
+
+        # Save predicted data with predictions (optional)
         if st.button("Download Results"):
-            data.to_csv("financial.csv", index=False)
+            data_original.to_csv("financial.csv", index=False)
             st.success("Prediction results downloaded!")
+
 
 def main():
     """Main application structure."""
